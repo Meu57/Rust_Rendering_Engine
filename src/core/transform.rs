@@ -1,4 +1,5 @@
 use crate::{Point3, Vector3};
+use crate::core::geometry::Normal3;
 
 // A simple 4x4 Matrix placeholder for demonstration
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,6 +87,28 @@ impl Transform {
             // If w is 0 (point at infinity) or very small, this could be unstable.
             // PBRT suggests checking for near-zero w here.
             Point3 { x: xp / wp, y: yp / wp, z: zp / wp }
+        }
+    }
+
+    pub fn transform_normal(&self, n: Normal3) -> Normal3 {
+        let x = n.x;
+        let y = n.y;
+        let z = n.z;
+
+        // We use the columns of m_inv as the rows for the multiplication
+        // This effectively multiplies by (m_inv)^T
+        Normal3 {
+            x: self.m_inv.m[0][0] * x + self.m_inv.m[1][0] * y + self.m_inv.m[2][0] * z,
+            y: self.m_inv.m[0][1] * x + self.m_inv.m[1][1] * y + self.m_inv.m[2][1] * z,
+            z: self.m_inv.m[0][2] * x + self.m_inv.m[1][2] * y + self.m_inv.m[2][2] * z,
+        }
+    }
+
+    // We also need this helper for Instancing (World -> Object)
+    pub fn inverse(&self) -> Transform {
+        Transform {
+            m: self.m_inv,
+            m_inv: self.m,
         }
     }
 }

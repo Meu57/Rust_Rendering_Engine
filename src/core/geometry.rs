@@ -91,3 +91,28 @@ impl Neg for Vector3 {
         }
     }
 }
+
+// --- Bounding Box (AABB) for Acceleration Structures ---
+#[derive(Debug, Clone, Copy)]
+pub struct Bounds3 {
+    pub min: Point3,
+    pub max: Point3,
+}
+
+impl Bounds3 {
+    // Create a box that encloses two points
+    pub fn new(p1: Point3, p2: Point3) -> Self {
+        Bounds3 {
+            min: Point3 { x: p1.x.min(p2.x), y: p1.y.min(p2.y), z: p1.z.min(p2.z) },
+            max: Point3 { x: p1.x.max(p2.x), y: p1.y.max(p2.y), z: p1.z.max(p2.z) },
+        }
+    }
+
+    // Expand the box to include a third point
+    pub fn union_point(self, p: Point3) -> Self {
+        Bounds3 {
+            min: Point3 { x: self.min.x.min(p.x), y: self.min.y.min(p.y), z: self.min.z.min(p.z) },
+            max: Point3 { x: self.max.x.max(p.x), y: self.max.y.max(p.y), z: self.max.z.max(p.z) },
+        }
+    }
+}

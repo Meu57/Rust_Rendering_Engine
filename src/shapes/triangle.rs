@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use crate::core::geometry::{Point3, Vector3, Normal3, Point2};
+use crate::core::geometry::{Point3, Vector3, Normal3, Point2, Bounds3};
 use crate::core::ray::Ray;
 use crate::core::interaction::{SurfaceInteraction, ShadingData};
-use crate::core::math::{difference_of_products, Interval, next_float_up, next_float_down};
+use crate::core::math::{difference_of_products, Interval};
+use crate::core::primitive::Shape; // <--- Import the Trait
 
-// --- The Mesh Data ---
+// --- The Mesh Data (Unchanged) ---
 pub struct TriangleMesh {
     pub n_triangles: usize,
     pub vertex_indices: Vec<usize>,
@@ -39,16 +40,29 @@ impl Triangle {
             v_index: tri_number * 3,
         }
     }
+}
 
-    // THE ROBUST WATERTIGHT INTERSECTION ALGORITHM
-    pub fn intersect(&self, ray: &Ray, t_max: f32) -> Option<(f32, SurfaceInteraction)> {
-        // 1. Get Vertices
+// THIS IS THE "SHAPE TRAIT" IMPLEMENTATION
+// Now the Triangle can be used by Primitives and Instancing
+impl Shape for Triangle {
+    fn bounds(&self) -> Bounds3 {
         let idx = &self.mesh.vertex_indices;
         let p0 = self.mesh.p[idx[self.v_index]];
         let p1 = self.mesh.p[idx[self.v_index + 1]];
         let p2 = self.mesh.p[idx[self.v_index + 2]];
 
-        // 2. Permutation (Standard PBRT Logic)
+        // Create a box that contains all 3 vertices
+        Bounds3::new(p0, p1).union_point(p2)
+    }
+
+    fn intersect(&self, ray: &Ray, t_max: f32) -> Option<(f32, SurfaceInteraction)> {
+        // [This is the exact same Watertight code as before, just moved inside the Trait block]
+        
+        let idx = &self.mesh.vertex_indices;
+        let p0 = self.mesh.p[idx[self.v_index]];
+        let p1 = self.mesh.p[idx[self.v_index + 1]];
+        let p2 = self.mesh.p[idx[self.v_index + 2]];
+
         let abs_d = Vector3 { x: ray.d.x.abs(), y: ray.d.y.abs(), z: ray.d.z.abs() };
         let kz = if abs_d.x > abs_d.y {
             if abs_d.x > abs_d.z { 0 } else { 2 }
@@ -58,7 +72,6 @@ impl Triangle {
         let kx = (kz + 1) % 3;
         let ky = (kx + 1) % 3;
 
-        // Helper to permute
         let permute = |v: Vector3| -> Vector3 {
             let c = [v.x, v.y, v.z];
             Vector3 { x: c[kx], y: c[ky], z: c[kz] }
@@ -69,24 +82,18 @@ impl Triangle {
         let p1t_vec = permute(p1 - ray.o);
         let p2t_vec = permute(p2 - ray.o);
 
-        // 3. Shear Transformation
         let sx = -d.x / d.z;
         let sy = -d.y / d.z;
         let sz = 1.0 / d.z;
 
-        // Only shear X and Y for now
         let mut p0t = Vector3 { x: p0t_vec.x + sx * p0t_vec.z, y: p0t_vec.y + sy * p0t_vec.z, z: p0t_vec.z };
         let mut p1t = Vector3 { x: p1t_vec.x + sx * p1t_vec.z, y: p1t_vec.y + sy * p1t_vec.z, z: p1t_vec.z };
         let mut p2t = Vector3 { x: p2t_vec.x + sx * p2t_vec.z, y: p2t_vec.y + sy * p2t_vec.z, z: p2t_vec.z };
 
-        // 4. Edge Functions with FMA Error Correction
-        // e0 = p1.x * p2.y - p1.y * p2.x
         let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); 
         let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);
         let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);
 
-        // 5. Double Precision Fallback
-        // If the ray hits the edge exactly (e == 0), float precision isn't enough.
         if e0 == 0.0 || e1 == 0.0 || e2 == 0.0 {
             let p2txp1ty = (p2t.x as f64) * (p1t.y as f64);
             let p2typ1tx = (p2t.y as f64) * (p1t.x as f64);
@@ -101,7 +108,6 @@ impl Triangle {
             e2 = (p1typ0tx - p1txp0ty) as f32;
         }
 
-        // 6. Edge Checks
         if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) && (e0 > 0.0 || e1 > 0.0 || e2 > 0.0) {
             return None;
         }
@@ -109,7 +115,6 @@ impl Triangle {
         let det = e0 + e1 + e2;
         if det == 0.0 { return None; }
 
-        // 7. Compute Scaled T
         p0t.z *= sz;
         p1t.z *= sz;
         p2t.z *= sz;
@@ -121,16 +126,10 @@ impl Triangle {
             return None;
         }
 
-        // 8. Finalize
         let inv_det = 1.0 / det;
         let t = t_scaled * inv_det;
         
-        // (Barycentrics would be used here for interpolation)
-        // let b0 = e0 * inv_det; ...
-
-        // Construct Surface Interaction
         let p_hit = ray.at(t);
-        // Placeholder Normal (We will fix this when we get to 'Barycentrics')
         let dummy_n = Normal3 { x: 0.0, y: 1.0, z: 0.0 }; 
         let dummy_uv = Point2 { x: 0.0, y: 0.0 };
         
@@ -138,7 +137,7 @@ impl Triangle {
             p_hit, 
             Vector3{x:0.0,y:0.0,z:0.0}, 
             dummy_uv, 
-            -ray.d,  
+            -ray.d, 
             dummy_n, 
             ray.time
         );
