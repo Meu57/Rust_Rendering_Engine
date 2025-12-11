@@ -1,8 +1,0 @@
-   0.246861700s  INFO prepare_target{force=false package_id=my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine) target="my-rendering-engine"}: cargo::core::compiler::fingerprint: fingerprint dirty for my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine)/Check { test: false }/TargetInner { name: "my-rendering-engine", doc: true, ..: with_path("C:\\Users\\ameen\\Projects\\my-rendering-engine\\src\\main.rs", Edition2021) }
-   0.249716700s  INFO prepare_target{force=false package_id=my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine) target="my-rendering-engine"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(Stale)
-   0.349513600s  INFO prepare_target{force=false package_id=my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine) target="my-rendering-engine"}: cargo::core::compiler::fingerprint: fingerprint dirty for my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine)/Check { test: true }/TargetInner { name: "my-rendering-engine", doc: true, ..: with_path("C:\\Users\\ameen\\Projects\\my-rendering-engine\\src\\main.rs", Edition2021) }
-   0.349553500s  INFO prepare_target{force=false package_id=my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine) target="my-rendering-engine"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(Stale)
-    Checking my-rendering-engine v0.1.0 (C:\Users\ameen\Projects\my-rendering-engine)
-error: could not compile `my-rendering-engine` (bin "my-rendering-engine") due to 5 previous errors
-warning: build failed, waiting for other jobs to finish...
-error: could not compile `my-rendering-engine` (bin "my-rendering-engine" test) due to 5 previous errors
