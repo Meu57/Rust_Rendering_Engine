@@ -2,7 +2,7 @@ use std::sync::Arc;
 use crate::core::geometry::{Point3, Vector3, Normal3, Point2};
 use crate::core::ray::Ray;
 use crate::core::interaction::{SurfaceInteraction, ShadingData};
-use crate::core::math::{Interval, next_float_up, next_float_down};
+use crate::core::math::{difference_of_products, Interval, next_float_up, next_float_down};
 
 // --- The Mesh Data ---
 pub struct TriangleMesh {
@@ -81,9 +81,9 @@ impl Triangle {
 
         // 4. Edge Functions with FMA Error Correction
         // e0 = p1.x * p2.y - p1.y * p2.x
-        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); //<<----Error Here
-        let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);//<<----Error Here
-        let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);//<<----Error Here
+        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); 
+        let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);
+        let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);
 
         // 5. Double Precision Fallback
         // If the ray hits the edge exactly (e == 0), float precision isn't enough.
@@ -138,7 +138,7 @@ impl Triangle {
             p_hit, 
             Vector3{x:0.0,y:0.0,z:0.0}, 
             dummy_uv, 
-            -ray.d,  //<<<<<<------Error Here
+            -ray.d,  
             dummy_n, 
             ray.time
         );

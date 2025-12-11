@@ -78,3 +78,16 @@ impl From<Normal3> for Vector3 {
         Vector3 { x: n.x, y: n.y, z: n.z }
     }
 }
+
+use std::ops::Neg;
+
+impl Neg for Vector3 {
+    type Output = Vector3;
+    fn neg(self) -> Vector3 {
+        Vector3 {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+}

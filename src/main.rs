@@ -1,9 +1,12 @@
 mod core; // This tells Rust: "Go check src/core/mod.rs"
 
 // Now we import from the core module we just declared
+use std::sync::Arc;
+use crate::core::ray::Ray;
 use crate::core::geometry::{Point3, Vector3};
 use crate::core::transform::{Transform, Matrix4x4};
 use crate::core::math::{Interval, solve_quadratic};
+use crate::shapes::triangle::{Triangle, TriangleMesh};
 mod shapes;
 
 fn main() {
@@ -77,7 +80,7 @@ fn main() {
     let indices = vec![0, 1, 2];
 
     // Create the Mesh (wrapped in Arc for shared ownership)
-    let mesh = Arc::new(TriangleMesh::new( //<<----- Error Here
+    let mesh = Arc::new(TriangleMesh::new( 
         indices, 
         vertices, 
         None, // No normals yet
@@ -85,7 +88,7 @@ fn main() {
     ));
 
     // Create the Triangle Object (pointing to triangle #0 in the mesh)
-    let tri = Triangle::new(mesh.clone(), 0); //<<----------Error Here
+    let tri = Triangle::new(mesh.clone(), 0); 
 
     // 2. Test 1: A Hit
     // Ray starts at (0,0,-5) and points forward (+Z). Should hit at t=5.0.
@@ -106,7 +109,7 @@ fn main() {
 
     // 3. Test 2: A Miss
     // Ray starts at (0,0,-5) but points to the right. Should miss.
-    let ray_miss = Ray::new(//<<--------- Error Here
+    let ray_miss = Ray::new(
         Point3 { x: 0.0, y: 0.0, z: -5.0 },
         Vector3 { x: 1.0, y: 0.0, z: 0.0 }, // Points right
         0.0
