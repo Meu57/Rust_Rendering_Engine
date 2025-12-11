@@ -81,9 +81,9 @@ impl Triangle {
 
         // 4. Edge Functions with FMA Error Correction
         // e0 = p1.x * p2.y - p1.y * p2.x
-        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x);
-        let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);
-        let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);
+        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); //<<----Error Here
+        let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);//<<----Error Here
+        let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);//<<----Error Here
 
         // 5. Double Precision Fallback
         // If the ray hits the edge exactly (e == 0), float precision isn't enough.
@@ -138,7 +138,7 @@ impl Triangle {
             p_hit, 
             Vector3{x:0.0,y:0.0,z:0.0}, 
             dummy_uv, 
-            -ray.d, 
+            -ray.d,  //<<<<<<------Error Here
             dummy_n, 
             ray.time
         );
