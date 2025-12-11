@@ -52,3 +52,29 @@ impl Add<Vector3> for Vector3 {
 
 // NOTE: We do NOT implement Add<Point3> for Point3. 
 // Attempting "p1 + p2" will now cause a compile-time error.
+
+// --- New Additions for Week 2 ---
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Normal3 {
+    pub x: f32, pub y: f32, pub z: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point2 {
+    pub x: f32, pub y: f32,
+}
+
+// Explicit conversion: Vector -> Normal
+impl From<Vector3> for Normal3 {
+    fn from(v: Vector3) -> Self {
+        Normal3 { x: v.x, y: v.y, z: v.z }
+    }
+}
+
+// Explicit conversion: Normal -> Vector (for math)
+impl From<Normal3> for Vector3 {
+    fn from(n: Normal3) -> Self {
+        Vector3 { x: n.x, y: n.y, z: n.z }
+    }
+}

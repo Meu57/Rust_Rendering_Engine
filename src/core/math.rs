@@ -128,3 +128,15 @@ pub fn solve_quadratic(a: f32, b: f32, c: f32) -> Option<(f32, f32)> {
 
     if t0 > t1 { Some((t1, t0)) } else { Some((t0, t1)) }
 }
+
+// --- Error-Free Arithmetic ---
+
+/// Computes (a * b) - (c * d) with error correction using FMA.
+/// This prevents catastrophic cancellation when the terms are nearly equal.
+pub fn difference_of_products(a: f32, b: f32, c: f32, d: f32) -> f32 {
+    let cd = c * d;
+    // Rust's mul_add(a, b, c) computes (a * b) + c
+    let diff = a.mul_add(b, -cd); 
+    let error = (-c).mul_add(d, cd);
+    diff + error
+}
