@@ -5,3 +5,5 @@ pub mod ray;         // NEW
 pub mod interaction; // NEW
 pub mod primitive;   // NEW
 pub mod spectrum; // <--- NEW
+pub mod reflection;
+pub mod microfacet; // <--- NEW

@@ -243,3 +243,28 @@ impl BlackbodySpectrum {
         SampledSpectrum { values }
     }
 }
+
+// --- Missing Math Implementations for Week 5 ---
+
+impl Sub for SampledSpectrum {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        let mut v = [0.0; N_SPECTRUM_SAMPLES];
+        for i in 0..N_SPECTRUM_SAMPLES { 
+            v[i] = self.values[i] - rhs.values[i]; 
+        }
+        SampledSpectrum { values: v }
+    }
+}
+
+impl Div for SampledSpectrum {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self {
+        let mut v = [0.0; N_SPECTRUM_SAMPLES];
+        for i in 0..N_SPECTRUM_SAMPLES { 
+            // Avoid NaN propagation if dividing by zero (though rare in Fresnel)
+            v[i] = if rhs.values[i] != 0.0 { self.values[i] / rhs.values[i] } else { 0.0 }; 
+        }
+        SampledSpectrum { values: v }
+    }
+}

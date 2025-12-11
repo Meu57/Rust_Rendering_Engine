@@ -130,3 +130,38 @@ impl Mul<f32> for Vector3 {
         }
     }
 }
+
+impl Vector3 {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Vector3 { x, y, z }
+    }
+
+    pub fn cross(self, other: Vector3) -> Vector3 {
+        Vector3 {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+        }
+    }
+
+    pub fn dot(self, other: Vector3) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    pub fn length_squared(self) -> f32 {
+        self.x * self.x + self.y * self.y + self.z * self.z
+    }
+
+    pub fn length(self) -> f32 {
+        self.length_squared().sqrt()
+    }
+
+    pub fn normalize(self) -> Vector3 {
+        let len = self.length();
+        if len > 0.0 {
+            self * (1.0 / len)
+        } else {
+            self // Handle zero vector gracefully
+        }
+    }
+}
