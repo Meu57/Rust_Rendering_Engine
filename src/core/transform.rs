@@ -1,4 +1,5 @@
 use crate::core::geometry::{Point3, Vector3, Normal3};
+use crate::core::ray::Ray;
 
 // A simple 4x4 Matrix placeholder for demonstration
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -91,6 +92,8 @@ pub struct Transform {
 
 impl Transform {
 
+    
+
     // Camera LookAt Transform
     // Position (eye), Target (at), Up vector
     pub fn look_at(pos: Point3, look: Point3, up: Vector3) -> Self {
@@ -110,7 +113,7 @@ impl Transform {
         // We construct the CameraToWorld transform
         Transform::new(mat)
     }
-    
+
     pub fn new(m: Matrix4x4) -> Self {
         let inverse_result = try_inverse(&m); 
 
@@ -175,3 +178,4 @@ impl Transform {
 fn try_inverse(m: &Matrix4x4) -> Option<Matrix4x4> {
     m.inverse()
 }
+

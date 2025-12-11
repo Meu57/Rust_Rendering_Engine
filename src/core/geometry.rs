@@ -165,3 +165,30 @@ impl Vector3 {
         }
     }
 }
+
+// Add this impl block for Point3
+impl Point3 {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Point3 { x, y, z }
+    }
+}
+
+// Add this impl for Vector subtraction
+impl Sub for Vector3 {
+    type Output = Vector3;
+    fn sub(self, other: Vector3) -> Vector3 {
+        Vector3 {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
+        }
+    }
+}
+
+// Allow explicit casting from Point3 to Vector3
+impl From<Point3> for Vector3 {
+    fn from(p: Point3) -> Self {
+        Vector3 { x: p.x, y: p.y, z: p.z }
+    }
+}
+
