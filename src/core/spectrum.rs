@@ -180,3 +180,66 @@ impl Div<f32> for Flux {
     type Output = Irradiance;
     fn div(self, area: f32) -> Irradiance { Irradiance(self.0 * (1.0 / area)) }
 }
+
+// --- Week 3 Days 6-7: Blackbody Radiation ---
+
+// Physical Constants
+const C: f32 = 299792458.0;       // Speed of Light [m/s]
+const H: f32 = 6.62606957e-34;    // Planck's Constant [J s]
+const KB: f32 = 1.3806488e-23;    // Boltzmann Constant [J/K]
+
+/// Calculates Blackbody Radiance for a given wavelength (nm) and temperature (K)
+/// Uses Planck's Law: L(lambda, T)
+pub fn blackbody(lambda_nm: f32, temp_k: f32) -> f32 {
+    if temp_k <= 0.0 || lambda_nm <= 0.0 { return 0.0; }
+
+    // Convert nanometers to meters for the physics formula
+    let l = lambda_nm * 1.0e-9;
+
+    // Exponent: (h * c) / (lambda * kB * T)
+    let exponent = (H * C) / (l * KB * temp_k);
+    
+    // Denominator: lambda^5 * (e^exponent - 1)
+    let denominator = l.powi(5) * (exponent.exp() - 1.0);
+
+    // Result: (2 * h * c^2) / denominator
+    (2.0 * H * C * C) / denominator
+}
+
+/// A normalized Blackbody Spectrum (Peak = 1.0)
+/// We separate Color (Temperature) from Intensity (Brightness scale)
+#[derive(Debug, Clone, Copy)]
+pub struct BlackbodySpectrum {
+    pub temp_k: f32,
+    pub normalization_factor: f32,
+}
+
+impl BlackbodySpectrum {
+    pub fn new(temp_k: f32) -> Self {
+        // Wien's Displacement Law: Find the peak wavelength (in meters)
+        // b approx 2.8977721e-3 m K
+        let lambda_max_meters = 2.8977721e-3 / temp_k;
+        
+        // Convert to nm to query our blackbody function
+        let peak_val = blackbody(lambda_max_meters * 1.0e9, temp_k);
+        
+        Self {
+            temp_k,
+            normalization_factor: if peak_val > 0.0 { 1.0 / peak_val } else { 0.0 },
+        }
+    }
+
+    // Evaluate the spectrum at a specific wavelength
+    pub fn eval(&self, lambda: f32) -> f32 {
+        blackbody(lambda, self.temp_k) * self.normalization_factor
+    }
+
+    // Helper to generate a SampledSpectrum from this Blackbody
+    pub fn sample(&self, lambdas: &SampledWavelengths) -> SampledSpectrum {
+        let mut values = [0.0; N_SPECTRUM_SAMPLES];
+        for i in 0..N_SPECTRUM_SAMPLES {
+            values[i] = self.eval(lambdas.lambda[i]);
+        }
+        SampledSpectrum { values }
+    }
+}
