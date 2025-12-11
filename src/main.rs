@@ -92,7 +92,7 @@ fn main() {
 
     // 2. Test 1: A Hit
     // Ray starts at (0,0,-5) and points forward (+Z). Should hit at t=5.0.
-    let ray_hit = Ray::new(//<<--------Error Here
+    let ray_hit = Ray::new(
         Point3 { x: 0.0, y: 0.0, z: -5.0 },
         Vector3 { x: 0.0, y: 0.0, z: 1.0 },
         0.0 // time
