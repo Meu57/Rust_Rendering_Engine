@@ -62,7 +62,7 @@ impl Interaction {
     pub fn spawn_ray(&self, d: Vector3) -> Ray {
         // Robustness Note: In a full engine, we use self.p_error to 
         // strictly bound the offset. For Week 2, we use a shadow epsilon.
-        let offset = d * 0.001;  // <<-----ERROR HERE>>
+        let offset = d * 0.001;  
         let origin = self.p + offset;
         
         Ray::new(origin, d, self.time)

@@ -116,3 +116,17 @@ impl Bounds3 {
         }
     }
 }
+
+use std::ops::Mul;
+
+// Enable "Vector * Float" (Scaling)
+impl Mul<f32> for Vector3 {
+    type Output = Vector3;
+    fn mul(self, scalar: f32) -> Vector3 {
+        Vector3 {
+            x: self.x * scalar,
+            y: self.y * scalar,
+            z: self.z * scalar,
+        }
+    }
+}

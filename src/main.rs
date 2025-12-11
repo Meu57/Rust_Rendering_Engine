@@ -18,7 +18,7 @@ fn main() {
     ];
     let window_mesh = Arc::new(TriangleMesh::new(vec![0,1,2], window_verts, None, None));
     let window_shape = Arc::new(Triangle::new(window_mesh, 0));
-    let window_prim = GeometricPrimitive::new(window_shape, None, 0.5); // <<-----ERROR HERE>>
+    let window_prim = GeometricPrimitive::new(window_shape, None, 0.5); 
 
     // 2. The "Wall" (Solid) at Z=10
     let wall_verts = vec![
@@ -28,7 +28,7 @@ fn main() {
     ];
     let wall_mesh = Arc::new(TriangleMesh::new(vec![0,1,2], wall_verts, None, None));
     let wall_shape = Arc::new(Triangle::new(wall_mesh, 0));
-    let wall_prim = GeometricPrimitive::new(wall_shape, None, 1.0); // <<-----ERROR HERE>>
+    let wall_prim = GeometricPrimitive::new(wall_shape, None, 1.0); 
 
     // 3. Fire Rays
     println!("Firing rays through the window...");

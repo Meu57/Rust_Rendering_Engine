@@ -140,3 +140,23 @@ pub fn difference_of_products(a: f32, b: f32, c: f32, d: f32) -> f32 {
     let error = (-c).mul_add(d, cd);
     diff + error
 }
+
+// --- Stable Hashing for Stochastic Alpha ---
+pub fn hash_float(x: f32, y: f32, z: f32) -> f32 {
+    let ix = x.to_bits();
+    let iy = y.to_bits();
+    let iz = z.to_bits();
+    
+    // MurmurHash3 mix constants
+    let mut h = (ix ^ iy ^ iz).wrapping_mul(0xcc9e2d51);
+    h = (h << 13) | (h >> 19);
+    h = h.wrapping_mul(0x1b873593);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x85ebca6b);
+    h ^= h >> 13;
+    h = h.wrapping_mul(0xc2b2ae35);
+    h ^= h >> 16;
+
+    // Convert to float [0, 1]
+    (h as f32) / (u32::MAX as f32)
+}
