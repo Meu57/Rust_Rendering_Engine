@@ -90,6 +90,27 @@ pub struct Transform {
 }
 
 impl Transform {
+
+    // Camera LookAt Transform
+    // Position (eye), Target (at), Up vector
+    pub fn look_at(pos: Point3, look: Point3, up: Vector3) -> Self {
+        let dir = (look - pos).normalize();
+        let right = up.normalize().cross(dir).normalize();
+        let new_up = dir.cross(right);
+
+        let mut m = [[0.0; 4]; 4];
+        
+        // Rotation part (columns)
+        m[0][0] = right.x;  m[0][1] = new_up.x;  m[0][2] = dir.x;  m[0][3] = pos.x;
+        m[1][0] = right.y;  m[1][1] = new_up.y;  m[1][2] = dir.y;  m[1][3] = pos.y;
+        m[2][0] = right.z;  m[2][1] = new_up.z;  m[2][2] = dir.z;  m[2][3] = pos.z;
+        m[3][0] = 0.0;      m[3][1] = 0.0;       m[3][2] = 0.0;    m[3][3] = 1.0;
+
+        let mat = Matrix4x4 { m };
+        // We construct the CameraToWorld transform
+        Transform::new(mat)
+    }
+    
     pub fn new(m: Matrix4x4) -> Self {
         let inverse_result = try_inverse(&m); 
 
