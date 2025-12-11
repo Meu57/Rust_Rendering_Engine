@@ -160,3 +160,19 @@ pub fn hash_float(x: f32, y: f32, z: f32) -> f32 {
     // Convert to float [0, 1]
     (h as f32) / (u32::MAX as f32)
 }
+
+use crate::core::geometry::Point2;
+use std::f32::consts::PI;
+
+// --- Sampling Helpers ---
+
+/// Samples a point on a unit disk with uniform probability.
+/// Used for generating random directions for lights and surfaces.
+pub fn sample_uniform_disk_polar(u: Point2) -> Point2 {
+    let r = u.x.sqrt();
+    let theta = 2.0 * PI * u.y;
+    Point2 {
+        x: r * theta.cos(),
+        y: r * theta.sin(),
+    }
+}

@@ -74,6 +74,7 @@ impl TrowbridgeReitzDistribution {
 
     // 3. Sample_wh (VNDF Importance Sampling)
     // Samples a microfacet normal 'wh' visible from direction 'wo'
+    // 3. Sample_wh (VNDF Importance Sampling)
     pub fn sample_wh(&self, wo: Vector3, u: Point2) -> Vector3 {
         // A. Transform to unit hemisphere configuration (stretch)
         let mut wh = Vector3 { 
@@ -86,19 +87,14 @@ impl TrowbridgeReitzDistribution {
 
         // B. Orthonormal basis
         let t1 = if wh.z < 0.99999 {
-            // Cross with Z axis
             Vector3 { x: 0.0, y: 0.0, z: 1.0 }.cross(wh).normalize()
         } else {
             Vector3 { x: 1.0, y: 0.0, z: 0.0 }
         };
         let t2 = wh.cross(t1);
 
-        // C. Sample Uniform Disk (Polar)
-        let mut p = Point2 { x: 0.0, y: 0.0 };
-        let r = u.x.sqrt();
-        let phi = 2.0 * PI * u.y;
-        p.x = r * phi.cos();
-        p.y = r * phi.sin();
+        // C. Sample Uniform Disk (Polar) -> USING SHARED HELPER
+        let mut p = crate::core::math::sample_uniform_disk_polar(u);
 
         // D. Warp to Hemisphere
         let h = (1.0 - p.x * p.x).max(0.0).sqrt();

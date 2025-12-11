@@ -7,3 +7,4 @@ pub mod primitive;   // NEW
 pub mod spectrum; // <--- NEW
 pub mod reflection;
 pub mod microfacet; // <--- NEW
+pub mod bsdf; // <--- NEW
