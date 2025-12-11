@@ -56,13 +56,12 @@ impl Shape for Triangle {
     }
 
     fn intersect(&self, ray: &Ray, t_max: f32) -> Option<(f32, SurfaceInteraction)> {
-        // [This is the exact same Watertight code as before, just moved inside the Trait block]
-        
         let idx = &self.mesh.vertex_indices;
         let p0 = self.mesh.p[idx[self.v_index]];
         let p1 = self.mesh.p[idx[self.v_index + 1]];
         let p2 = self.mesh.p[idx[self.v_index + 2]];
 
+        // 1. Permutation (Standard PBRT Logic)
         let abs_d = Vector3 { x: ray.d.x.abs(), y: ray.d.y.abs(), z: ray.d.z.abs() };
         let kz = if abs_d.x > abs_d.y {
             if abs_d.x > abs_d.z { 0 } else { 2 }
@@ -82,6 +81,7 @@ impl Shape for Triangle {
         let p1t_vec = permute(p1 - ray.o);
         let p2t_vec = permute(p2 - ray.o);
 
+        // 2. Shear Transformation
         let sx = -d.x / d.z;
         let sy = -d.y / d.z;
         let sz = 1.0 / d.z;
@@ -90,10 +90,12 @@ impl Shape for Triangle {
         let mut p1t = Vector3 { x: p1t_vec.x + sx * p1t_vec.z, y: p1t_vec.y + sy * p1t_vec.z, z: p1t_vec.z };
         let mut p2t = Vector3 { x: p2t_vec.x + sx * p2t_vec.z, y: p2t_vec.y + sy * p2t_vec.z, z: p2t_vec.z };
 
+        // 3. Edge Functions
         let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); 
         let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);
         let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);
 
+        // 4. Double Precision Fallback (The "Watertight" Guarantee)
         if e0 == 0.0 || e1 == 0.0 || e2 == 0.0 {
             let p2txp1ty = (p2t.x as f64) * (p1t.y as f64);
             let p2typ1tx = (p2t.y as f64) * (p1t.x as f64);
@@ -108,6 +110,7 @@ impl Shape for Triangle {
             e2 = (p1typ0tx - p1txp0ty) as f32;
         }
 
+        // 5. Intersection Check
         if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) && (e0 > 0.0 || e1 > 0.0 || e2 > 0.0) {
             return None;
         }
@@ -130,12 +133,16 @@ impl Shape for Triangle {
         let t = t_scaled * inv_det;
         
         let p_hit = ray.at(t);
+        // TODO: We are passing 0 error here. In Week 3, we must calculate p_error
+        // to prevent self-intersection (acne) for shadow rays.
+        let p_error = Vector3{x:0.0, y:0.0, z:0.0}; 
+        
         let dummy_n = Normal3 { x: 0.0, y: 1.0, z: 0.0 }; 
         let dummy_uv = Point2 { x: 0.0, y: 0.0 };
         
         let interaction = SurfaceInteraction::new(
             p_hit, 
-            Vector3{x:0.0,y:0.0,z:0.0}, 
+            p_error, 
             dummy_uv, 
             -ray.d, 
             dummy_n, 

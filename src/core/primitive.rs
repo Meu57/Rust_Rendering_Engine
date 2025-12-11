@@ -42,13 +42,37 @@ impl Primitive for GeometricPrimitive {
     }
 
     fn intersect(&self, ray: &Ray) -> Option<(f32, SurfaceInteraction)> {
-        // 1. Ask Shape for geometric hit
+        // 1. Geometric Hit?
         let hit = self.shape.intersect(ray, f32::INFINITY);
         
-        if let Some((t, mut interaction)) = hit {
-            // 2. Bind Material (Decoration)
-            // interaction.primitive = Some(self); // In full engine, we link back
-            Some((t, interaction))
+        if let Some((t_hit, interaction)) = hit {
+            // 2. Alpha Test
+            if self.alpha < 1.0 { // <<-----ERROR HERE>>
+                let u = hash_float(interaction.core.p.x, interaction.core.p.y, interaction.core.p.z); // <<-----ERROR HERE>>
+                
+                // If we hit a "hole" (u > alpha)
+                if u > self.alpha { // <<-----ERROR HERE>>
+                    //
+                    // Spawn a new ray starting at the hole, continuing forward
+                    let next_ray = interaction.core.spawn_ray(ray.d);
+                    
+                    // RECURSE: "Is there more of me behind this hole?"
+                    // For a triangle, this usually returns None immediately.
+                    // For a Sphere, this might hit the back face.
+                    if let Some((t_next, next_interaction)) = self.intersect(&next_ray) {
+                        // CRITICAL: Adjust distance!
+                        // The new hit is 't_next' away from the HOLE.
+                        // We need the distance from the ORIGINAL ray origin.
+                        return Some((t_hit + t_next, next_interaction));
+                    } else {
+                        // We passed through the object and hit nothing *inside* it.
+                        // Return None so the Scene/BVH knows to keep looking for OTHER objects.
+                        return None; 
+                    }
+                }
+            }
+            
+            Some((t_hit, interaction))
         } else {
             None
         }

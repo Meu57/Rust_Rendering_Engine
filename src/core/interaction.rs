@@ -1,4 +1,5 @@
 use crate::core::geometry::{Point3, Vector3, Normal3, Point2};
+use crate::core::ray::Ray; // Add this import at top
 
 /// Base struct for any interaction (Surface, Volume, Light)
 #[derive(Debug, Clone)]
@@ -52,5 +53,18 @@ impl SurfaceInteraction {
             dndv: Normal3{x:0.0,y:0.0,z:0.0},
             shading,
         }
+    }
+}
+
+impl Interaction {
+    // Spawns a new ray starting from this interaction point
+    // directed along 'd'. Handles offset to prevent self-intersection.
+    pub fn spawn_ray(&self, d: Vector3) -> Ray {
+        // Robustness Note: In a full engine, we use self.p_error to 
+        // strictly bound the offset. For Week 2, we use a shadow epsilon.
+        let offset = d * 0.001;  // <<-----ERROR HERE>>
+        let origin = self.p + offset;
+        
+        Ray::new(origin, d, self.time)
     }
 }

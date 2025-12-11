@@ -31,9 +31,7 @@ impl Matrix4x4 {
     pub fn inverse(&self) -> Option<Matrix4x4> {
         let m = self.m;
         
-        // 1. Calculate the Determinant
-        // (Using the expansion by minors for the first row)
-        // Sub-determinants for 3x3 matrices
+        // ... (The 's' and 'c' variable calculations remain exactly the same) ...
         let s0 = m[0][0] * m[1][1] - m[1][0] * m[0][1];
         let s1 = m[0][0] * m[1][2] - m[1][0] * m[0][2];
         let s2 = m[0][0] * m[1][3] - m[1][0] * m[0][3];
@@ -51,32 +49,39 @@ impl Matrix4x4 {
         let det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;
 
         if det.abs() < 1e-6 {
-            return None; // Singular matrix
+            return None;
         }
 
         let inv_det = 1.0 / det;
-
-        // 2. Calculate the Adjugate Matrix scaled by 1/det
         let mut inv = [[0.0; 4]; 4];
 
+        // Row 0
         inv[0][0] = ( m[1][1] * c5 - m[1][2] * c4 + m[1][3] * c3) * inv_det;
         inv[0][1] = (-m[0][1] * c5 + m[0][2] * c4 - m[0][3] * c3) * inv_det;
         inv[0][2] = ( m[3][1] * s5 - m[3][2] * s4 + m[3][3] * s3) * inv_det;
         inv[0][3] = (-m[2][1] * s5 + m[2][2] * s4 - m[2][3] * s3) * inv_det;
 
+        // Row 1
         inv[1][0] = (-m[1][0] * c5 + m[1][2] * c2 - m[1][3] * c1) * inv_det;
         inv[1][1] = ( m[0][0] * c5 - m[0][2] * c2 + m[0][3] * c1) * inv_det;
         inv[1][2] = (-m[3][0] * s5 + m[3][2] * s2 - m[3][3] * s1) * inv_det;
         inv[1][3] = ( m[2][0] * s5 - m[2][2] * s2 + m[2][3] * s1) * inv_det;
 
+        // Row 2
         inv[2][0] = ( m[1][0] * c4 - m[1][1] * c2 + m[1][3] * c0) * inv_det;
         inv[2][1] = (-m[0][0] * c4 + m[0][1] * c2 - m[0][3] * c0) * inv_det;
         inv[2][2] = ( m[3][0] * s4 - m[3][1] * s2 + m[3][3] * s0) * inv_det;
         inv[2][3] = (-m[2][0] * s4 + m[2][1] * s2 - m[2][3] * s0) * inv_det;
 
+        // Row 3
         inv[3][0] = (-m[1][0] * c3 + m[1][1] * c1 - m[1][2] * c0) * inv_det;
         inv[3][1] = ( m[0][0] * c3 - m[0][1] * c1 + m[0][2] * c0) * inv_det;
-        inv[3][2] = (-m[3][0] * s3 + m[3][1] * s1 - m[3][3] * s0) * inv_det;
+        
+        // --- THE FIX IS HERE ---
+        // Was: - m[3][3] * s0
+        // Now: - m[3][2] * s0
+        inv[3][2] = (-m[3][0] * s3 + m[3][1] * s1 - m[3][2] * s0) * inv_det;
+        
         inv[3][3] = ( m[2][0] * s3 - m[2][1] * s1 + m[2][2] * s0) * inv_det;
 
         Some(Matrix4x4 { m: inv })
