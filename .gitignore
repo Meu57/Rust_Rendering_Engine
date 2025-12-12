@@ -8,3 +8,5 @@ engine_run.log
 *.exe
 *.so
 *.dylib
+*.ppm
+*.p?m

@@ -176,3 +176,33 @@ pub fn sample_uniform_disk_polar(u: Point2) -> Point2 {
         y: r * theta.sin(),
     }
 }
+
+// --- PCG32 Random Number Generator ---
+// Minimal implementation of the PCG32 algorithm.
+// Fast, statistically good, and deterministic.
+pub struct RNG {
+    state: u64,
+    inc: u64,
+}
+
+impl RNG {
+    pub fn new(seed: u64, seq_index: u64) -> Self {
+        let mut rng = RNG { state: 0, inc: (seq_index << 1) | 1 };
+        rng.next_u32();
+        rng.state = rng.state.wrapping_add(seed);
+        rng.next_u32();
+        rng
+    }
+
+    pub fn next_u32(&mut self) -> u32 {
+        let oldstate = self.state;
+        self.state = oldstate.wrapping_mul(6364136223846793005).wrapping_add(self.inc);
+        let xorshifted = ((oldstate >> 18) ^ oldstate) >> 27;
+        let rot = (oldstate >> 59) as u32;
+        (xorshifted as u32).rotate_right(rot)
+    }
+
+    pub fn next_f32(&mut self) -> f32 {
+        (self.next_u32() as f32) * 2.3283064365386963e-10 // x * 2^-32
+    }
+}

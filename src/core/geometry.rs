@@ -123,3 +123,6 @@ impl Bounds3 {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point2i { pub x: i32, pub y: i32 }
