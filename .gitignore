@@ -1,6 +1,9 @@
+# Build artifacts
 /target/
 /**/target/
 engine_run.log
+
+# Debug / binary files
 *.pdb
 *.dll.lib
 *.dll.exp
@@ -8,5 +11,28 @@ engine_run.log
 *.exe
 *.so
 *.dylib
+
+# Media / image outputs
 *.ppm
-*.p?m
+*.p?m   # covers .pgm, .pbm, etc.
+
+# Common image formats
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.webp
+
+# Audio / video formats
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
