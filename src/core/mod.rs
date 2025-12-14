@@ -12,3 +12,6 @@ pub mod camera;
 pub mod sampler;   // <--- NEW
 pub mod film;      // <--- NEW
 pub mod integrator;// <--- NEW
+pub mod texture; // <--- NEW
+pub mod mipmap;    // <--- NEW
+pub mod imagemap;  // <--- NEW

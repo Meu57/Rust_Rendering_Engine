@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 # We will add dependencies here later (like 'rand' or 'rayon')
+image = "0.24" # For loading PNG/JPG files
