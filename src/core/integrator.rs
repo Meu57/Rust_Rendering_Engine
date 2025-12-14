@@ -32,21 +32,24 @@ pub fn render(
                 };
 
                 // 3. Generate Ray
-                // We pass resolution/fov manually here for simplicity, 
-                // but usually the camera stores this.
+                // We pass resolution/fov manually here for simplicity
                 let ray = camera.generate_ray(
                     raster_sample, 
-                    crate::core::geometry::Point2 { x: film.resolution.x as f32, y: film.resolution.y as f32 },
+                    crate::core::geometry::Point2 { 
+                        x: film.resolution.x as f32, 
+                        y: film.resolution.y as f32 
+                    },
                     90.0
                 );
 
                 // 4. Intersect (Li - Radiance)
                 let color = if let Some((_, interaction)) = scene.intersect(&ray) {
-                    // Debug: Normal Map (Map -1..1 to 0..1)
+                    // ✅ DEBUG: Output UVs as color (0..1 range)
+                    // FIX: Access uv via 'core'
                     Vector3 {
-                        x: (interaction.core.n.x + 1.0) * 0.5,
-                        y: (interaction.core.n.y + 1.0) * 0.5,
-                        z: (interaction.core.n.z + 1.0) * 0.5,
+                        x: interaction.core.uv.x,
+                        y: interaction.core.uv.y,
+                        z: 0.0,
                     }
                 } else {
                     Vector3 { x: 0.0, y: 0.0, z: 0.0 } // Black background
@@ -58,8 +61,14 @@ pub fn render(
             // Average samples
             film.set_pixel(pixel, pixel_color * (1.0 / spp));
         }
+
         // Simple progress bar
-        if y % 10 == 0 { print!("."); use std::io::Write; std::io::stdout().flush().unwrap(); }
+        if y % 10 == 0 { 
+            print!("."); 
+            use std::io::Write; 
+            std::io::stdout().flush().unwrap(); 
+        }
     }
+
     println!("\nDone!");
 }
