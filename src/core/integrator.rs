@@ -37,31 +37,33 @@ pub fn render(
 
                 let color = if let Some((_, interaction)) = scene.intersect(&ray) {
                     
+                    // --- BSSRDF Skin Test ---
                     let bssrdf = SeparableBSSRDF::new_skin(1.4);
                     let wo = -ray.d;
                     let n_vec = Vector3::from(interaction.core.n);
 
-                    // S_omega Exit
+                    // 1. S_omega Exit
                     let cos_theta_o = n_vec.dot(wo).abs();
                     let s_omega_exit = bssrdf.eval_directional(cos_theta_o);
 
-                    // Sample Probe Ray
+                    // 2. Sample Probe Ray
                     let u_dist = sampler.get_2d().x; 
                     let r = u_dist * 0.05; 
                     
-                    // Diffusion Term
+                    // 3. Diffusion Term
                     let sp = bssrdf.eval_spatial(r);
 
-                    // Lighting (S_omega Entry)
+                    // 4. Lighting (S_omega Entry)
                     let light_dir = Vector3::new(0.0, 0.0, 1.0).normalize(); 
                     let cos_theta_i = n_vec.dot(light_dir).max(0.0);
                     let s_omega_entry = bssrdf.eval_directional(cos_theta_i);
 
-                    // Combine
+                    // 5. Combine
                     let throughput = sp * s_omega_exit * s_omega_entry;
                     
-                    // FIX: Lower boost from 2000.0 to 50.0 to prevent white clipping
-                    let display_spectrum = throughput * 50.0; 
+                    // Exposure Compensation (0.2)
+                    let boost = 0.2;
+                    let display_spectrum = throughput * boost; 
 
                     let wavelengths = SampledWavelengths::sample_uniform(0.5);
                     let rgb = SampledSpectrum::xyz_to_rgb(display_spectrum.to_xyz(&wavelengths));
