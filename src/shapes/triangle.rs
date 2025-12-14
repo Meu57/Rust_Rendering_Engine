@@ -127,7 +127,7 @@ impl Shape for Triangle {
         let inv_det = 1.0 / det;
         let t = t_scaled * inv_det;
         
-        // --- BARYCENTRIC INTERPOLATION (THE FIX) ---
+        // --- BARYCENTRIC INTERPOLATION ---
         let b0 = e0 * inv_det;
         let b1 = e1 * inv_det;
         let b2 = e2 * inv_det;
@@ -146,16 +146,22 @@ impl Shape for Triangle {
             Point2 { x: 0.0, y: 0.0 }
         };
 
-        // TODO: Interpolate Normal n based on b0, b1, b2 if available
-        let n_geom = Normal3 { x: 0.0, y: 1.0, z: 0.0 }; // Placeholder geometric normal
+        // --- FIX: Calculate Real Geometric Normal ---
+        // Cross product of two edges gives the true normal of the plane
+        let edge1 = p1 - p0;
+        let edge2 = p2 - p0;
+        let n_geom = Normal3::from(edge1.cross(edge2).normalize());
 
+        // Ensure normal faces the ray (if single sided) or just pass it through
+        // For now, we trust the winding order.
+        
         let p_hit = ray.at(t);
         let p_error = Vector3{x:0.0, y:0.0, z:0.0}; 
         
         let interaction = SurfaceInteraction::new(
             p_hit, 
             p_error, 
-            uv, // <--- Now passing correct UVs
+            uv,
             -ray.d, 
             n_geom, 
             ray.time
