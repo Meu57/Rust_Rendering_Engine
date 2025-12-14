@@ -16,3 +16,4 @@ pub mod texture; // <--- NEW
 pub mod mipmap;    // <--- NEW
 pub mod imagemap;  // <--- NEW
 pub mod bssrdf; // <--- NEW
+pub mod noise; // <--- NEW
