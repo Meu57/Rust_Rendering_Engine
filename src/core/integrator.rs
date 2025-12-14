@@ -3,6 +3,8 @@ use crate::core::camera::PerspectiveCamera;
 use crate::core::primitive::Primitive;
 use crate::core::sampler::StratifiedSampler;
 use crate::core::film::Film;
+use crate::core::bsdf::{BSDF, BxDF, ThinDielectricBxDF};
+use crate::core::spectrum::{SampledSpectrum, SampledWavelengths};
 
 pub fn render(
     scene: &dyn Primitive,
@@ -32,7 +34,6 @@ pub fn render(
                 };
 
                 // 3. Generate Ray
-                // We pass resolution/fov manually here for simplicity
                 let ray = camera.generate_ray(
                     raster_sample, 
                     crate::core::geometry::Point2 { 
@@ -44,13 +45,38 @@ pub fn render(
 
                 // 4. Intersect (Li - Radiance)
                 let color = if let Some((_, interaction)) = scene.intersect(&ray) {
-                    // ✅ DEBUG: Output UVs as color (0..1 range)
-                    // FIX: Access uv via 'core'
-                    Vector3 {
-                        x: interaction.core.uv.x,
-                        y: interaction.core.uv.y,
-                        z: 0.0,
+
+                    // ---------------------------------------------------------
+                    // ✅ WEEK 7: Thin-Film Soap Bubble BSDF
+                    // ---------------------------------------------------------
+
+                    // Hardcoded thin-film parameters
+                    let bxdf = BxDF::ThinDielectric(ThinDielectricBxDF::new(
+                        1.33,   // IOR of soap film
+                        400.0,  // thickness in nm
+                    ));
+
+                    // FIX: Convert Normal3 to Vector3 explicitly
+                    let bsdf = BSDF::new(Vector3::from(interaction.core.n), bxdf);
+
+                    // Light coming from the camera direction
+                    let wo = -ray.d;
+
+                    // Dummy sample for now
+                    let u_sample = Point2 { x: 0.0, y: 0.5 };
+
+                    if let Some((f, _wi, _pdf)) = bsdf.sample_f(wo, u_sample) {
+                        // Convert spectral reflectance to RGB
+                        let wavelengths = SampledWavelengths::sample_uniform(0.5);
+                        let rgb = SampledSpectrum::xyz_to_rgb(f.to_xyz(&wavelengths));
+
+                        Vector3 { x: rgb[0], y: rgb[1], z: rgb[2] }
+                    } else {
+                        Vector3 { x: 0.0, y: 0.0, z: 0.0 }
                     }
+
+                    // ---------------------------------------------------------
+
                 } else {
                     Vector3 { x: 0.0, y: 0.0, z: 0.0 } // Black background
                 };
