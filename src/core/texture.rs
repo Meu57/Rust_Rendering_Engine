@@ -9,7 +9,7 @@ pub trait Texture: Send + Sync {
     fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum;
 }
 
-// --- 1. Basic Noise Texture (Keep as is) ---
+// --- 1. Basic Noise Texture ---
 pub struct NoiseTexture {
     noise: Perlin,
     scale: f32,
@@ -32,8 +32,7 @@ impl Texture for NoiseTexture {
     }
 }
 
-// --- 2. Cloud Texture (New!) ---
-// Uses fBm for fluffy, detailed clouds
+// --- 2. Cloud Texture ---
 pub struct CloudTexture {
     noise: Perlin,
     scale: f32,
@@ -50,15 +49,13 @@ impl Texture for CloudTexture {
             si.core.p.y * self.scale,
             si.core.p.z * self.scale
         );
-        // Depth 7 gives nice detail
         let n = self.noise.fbm(p, 7); 
         let val = 0.5 * (1.0 + n.clamp(-1.0, 1.0));
         SampledSpectrum::splat(val)
     }
 }
 
-// --- 3. Marble Texture (New!) ---
-// Uses Turbulence to distort a Sine wave
+// --- 3. Marble Texture (FIXED) ---
 pub struct MarbleTexture {
     noise: Perlin,
     scale: f32,
@@ -70,22 +67,27 @@ impl MarbleTexture {
 }
 impl Texture for MarbleTexture {
     fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum {
+        // We scale the point to control the noise frequency
         let p = Point3::new(
             si.core.p.x * self.scale,
             si.core.p.y * self.scale,
             si.core.p.z * self.scale
         );
         
-        // Marble Math: sin(z + turbulence)
-        // 10.0 controls how "wobbly" the veins are
+        // FIX: The previous formula used `p.z`. 
+        // Since your triangle is flat on Z (z=0), `p.z` was constant, 
+        // so the sine wave never generated stripes/veins.
+        // We now use `p.x + p.y` to create diagonal veins across the triangle.
+        let vein_direction = p.x + p.y; 
+        
         let chaos = 10.0 * self.noise.turbulence(p, 7);
-        let val = 0.5 * (1.0 + (p.z + chaos).sin());
+        let val = 0.5 * (1.0 + (vein_direction + chaos).sin());
         
         SampledSpectrum::splat(val)
     }
 }
 
-// ... (Keep the rest of the file: ConstantTexture, Mappings, etc.) ...
+// --- 4. Constant Texture ---
 pub struct ConstantTexture {
     value: SampledSpectrum,
 }
@@ -102,6 +104,7 @@ pub trait TextureMapping2D: Send + Sync {
     fn map(&self, si: &SurfaceInteraction) -> Point2;
 }
 
+// (Keep UVMapping, Spherical, Planar mappings below as they were)
 pub struct UVMapping2D {
     pub su: f32, pub sv: f32,
     pub du: f32, pub dv: f32,

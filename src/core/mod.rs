@@ -18,3 +18,4 @@ pub mod imagemap;  // <--- NEW
 pub mod bssrdf; // <--- NEW
 pub mod noise; // <--- NEW
 pub mod material; // <--- NEW
+pub mod light; // <--- NEW

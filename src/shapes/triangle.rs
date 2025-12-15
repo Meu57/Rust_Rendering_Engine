@@ -1,8 +1,9 @@
 use std::sync::Arc;
+
 use crate::core::geometry::{Point3, Vector3, Normal3, Point2, Bounds3};
 use crate::core::ray::Ray;
-use crate::core::interaction::{SurfaceInteraction, ShadingData};
-use crate::core::math::{difference_of_products};
+use crate::core::interaction::{SurfaceInteraction};
+use crate::core::math::{difference_of_products, sample_uniform_triangle};
 use crate::core::primitive::Shape;
 
 // --- The Mesh Data ---
@@ -15,7 +16,12 @@ pub struct TriangleMesh {
 }
 
 impl TriangleMesh {
-    pub fn new(indices: Vec<usize>, p: Vec<Point3>, n: Option<Vec<Normal3>>, uv: Option<Vec<Point2>>) -> Self {
+    pub fn new(
+        indices: Vec<usize>,
+        p: Vec<Point3>,
+        n: Option<Vec<Normal3>>,
+        uv: Option<Vec<Point2>>,
+    ) -> Self {
         TriangleMesh {
             n_triangles: indices.len() / 3,
             vertex_indices: indices,
@@ -51,6 +57,44 @@ impl Shape for Triangle {
         Bounds3::new(p0, p1).union_point(p2)
     }
 
+    // ------------------------------------------------------------
+    // NEW: Surface Area (required for unbiased area light sampling)
+    // ------------------------------------------------------------
+    fn area(&self) -> f32 {
+        let idx = &self.mesh.vertex_indices;
+        let p0 = self.mesh.p[idx[self.v_index]];
+        let p1 = self.mesh.p[idx[self.v_index + 1]];
+        let p2 = self.mesh.p[idx[self.v_index + 2]];
+
+        0.5 * (p1 - p0).cross(p2 - p0).length()
+    }
+
+    // ------------------------------------------------------------
+    // NEW: Uniform Surface Sampling (p(A) = 1 / Area)
+    // ------------------------------------------------------------
+    fn sample(&self, u: Point2) -> (Point3, Normal3) {
+        // Area-preserving barycentric sampling
+        let b = sample_uniform_triangle(u);
+        let b0 = b.x;
+        let b1 = b.y;
+        let b2 = 1.0 - b0 - b1;
+
+        let idx = &self.mesh.vertex_indices;
+        let p0 = self.mesh.p[idx[self.v_index]];
+        let p1 = self.mesh.p[idx[self.v_index + 1]];
+        let p2 = self.mesh.p[idx[self.v_index + 2]];
+
+        let p = p0 * b0 + p1 * b1 + p2 * b2;
+
+        // Geometric normal (not shading normal)
+        let n = Normal3::from((p1 - p0).cross(p2 - p0).normalize());
+
+        (p, n)
+    }
+
+    // ------------------------------------------------------------
+    // Ray–Triangle Intersection (UNCHANGED)
+    // ------------------------------------------------------------
     fn intersect(&self, ray: &Ray, t_max: f32) -> Option<(f32, SurfaceInteraction)> {
         let idx = &self.mesh.vertex_indices;
         let p0 = self.mesh.p[idx[self.v_index]];
@@ -58,7 +102,11 @@ impl Shape for Triangle {
         let p2 = self.mesh.p[idx[self.v_index + 2]];
 
         // 1. Permutation
-        let abs_d = Vector3 { x: ray.d.x.abs(), y: ray.d.y.abs(), z: ray.d.z.abs() };
+        let abs_d = Vector3 {
+            x: ray.d.x.abs(),
+            y: ray.d.y.abs(),
+            z: ray.d.z.abs(),
+        };
         let kz = if abs_d.x > abs_d.y {
             if abs_d.x > abs_d.z { 0 } else { 2 }
         } else {
@@ -86,12 +134,11 @@ impl Shape for Triangle {
         let mut p1t = Vector3 { x: p1t_vec.x + sx * p1t_vec.z, y: p1t_vec.y + sy * p1t_vec.z, z: p1t_vec.z };
         let mut p2t = Vector3 { x: p2t_vec.x + sx * p2t_vec.z, y: p2t_vec.y + sy * p2t_vec.z, z: p2t_vec.z };
 
-        // 3. Edge Functions
-        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x); 
+        // 3. Edge functions
+        let mut e0 = difference_of_products(p1t.x, p2t.y, p1t.y, p2t.x);
         let mut e1 = difference_of_products(p2t.x, p0t.y, p2t.y, p0t.x);
         let mut e2 = difference_of_products(p0t.x, p1t.y, p0t.y, p1t.x);
 
-        // 4. Fallback for precision
         if e0 == 0.0 || e1 == 0.0 || e2 == 0.0 {
             let p2txp1ty = (p2t.x as f64) * (p1t.y as f64);
             let p2typ1tx = (p2t.y as f64) * (p1t.x as f64);
@@ -106,38 +153,39 @@ impl Shape for Triangle {
             e2 = (p1typ0tx - p1txp0ty) as f32;
         }
 
-        if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) && (e0 > 0.0 || e1 > 0.0 || e2 > 0.0) {
+        if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) &&
+           (e0 > 0.0 || e1 > 0.0 || e2 > 0.0) {
             return None;
         }
 
         let det = e0 + e1 + e2;
-        if det == 0.0 { return None; }
+        if det == 0.0 {
+            return None;
+        }
 
         p0t.z *= sz;
         p1t.z *= sz;
         p2t.z *= sz;
-        
+
         let t_scaled = e0 * p0t.z + e1 * p1t.z + e2 * p2t.z;
 
-        if (det < 0.0 && (t_scaled >= 0.0 || t_scaled < t_max * det)) || 
+        if (det < 0.0 && (t_scaled >= 0.0 || t_scaled < t_max * det)) ||
            (det > 0.0 && (t_scaled <= 0.0 || t_scaled > t_max * det)) {
             return None;
         }
 
         let inv_det = 1.0 / det;
         let t = t_scaled * inv_det;
-        
-        // --- BARYCENTRIC INTERPOLATION ---
+
         let b0 = e0 * inv_det;
         let b1 = e1 * inv_det;
         let b2 = e2 * inv_det;
 
-        // Interpolate UVs
         let uv = if let Some(uvs) = &self.mesh.uv {
             let uv0 = uvs[idx[self.v_index]];
             let uv1 = uvs[idx[self.v_index + 1]];
             let uv2 = uvs[idx[self.v_index + 2]];
-            
+
             Point2 {
                 x: b0 * uv0.x + b1 * uv1.x + b2 * uv2.x,
                 y: b0 * uv0.y + b1 * uv1.y + b2 * uv2.y,
@@ -146,25 +194,20 @@ impl Shape for Triangle {
             Point2 { x: 0.0, y: 0.0 }
         };
 
-        // --- FIX: Calculate Real Geometric Normal ---
-        // Cross product of two edges gives the true normal of the plane
         let edge1 = p1 - p0;
         let edge2 = p2 - p0;
         let n_geom = Normal3::from(edge1.cross(edge2).normalize());
 
-        // Ensure normal faces the ray (if single sided) or just pass it through
-        // For now, we trust the winding order.
-        
         let p_hit = ray.at(t);
-        let p_error = Vector3{x:0.0, y:0.0, z:0.0}; 
-        
+        let p_error = Vector3 { x: 0.0, y: 0.0, z: 0.0 };
+
         let interaction = SurfaceInteraction::new(
-            p_hit, 
-            p_error, 
+            p_hit,
+            p_error,
             uv,
-            -ray.d, 
-            n_geom, 
-            ray.time
+            -ray.d,
+            n_geom,
+            ray.time,
         );
 
         Some((t, interaction))
