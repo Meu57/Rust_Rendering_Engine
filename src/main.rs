@@ -10,22 +10,27 @@ use crate::core::primitive::{GeometricPrimitive, Primitive, PrimitiveList};
 use crate::shapes::triangle::{TriangleMesh, Triangle};
 use crate::core::film::Film;
 use crate::core::integrator::render;
-use crate::core::material::{MatteMaterial, EmissiveMaterial};
-use crate::core::texture::{ConstantTexture, MarbleTexture};
+use crate::core::material::{PrincipledMaterial, EmissiveMaterial};
+use crate::core::texture::{ConstantTexture, MarbleTexture}; 
 use crate::core::spectrum::SampledSpectrum;
 use crate::core::light::{Light, DiffuseAreaLight};
 
 fn main() {
-    println!("--- Month 3 Week 9: Direct Lighting + NEE ---");
+    println!("--- Month 3 Week 9: Direct Lighting + NEE (Principled Material) ---");
 
     // --------------------------------------------------
-    // 1. Materials
+    // 1. Materials (Principled)
     // --------------------------------------------------
-    let marble_tex = Arc::new(MarbleTexture::new(4.0));
-    let sigma_zero = Arc::new(ConstantTexture::new(SampledSpectrum::new(0.0)));
-    let marble_mat = Arc::new(MatteMaterial::new(marble_tex, sigma_zero));
+    // Use MarbleTexture as a base color example (could be any texture)
+    let base_tex = Arc::new(MarbleTexture::new(4.0));
+    // Metallic: try 0.0 for dielectric, 1.0 for metal. Change to test metalness.
+    let metallic_tex = Arc::new(ConstantTexture::new(SampledSpectrum::new(0.0))); // 0.0 = dielectric
+    // Roughness: 0.2 roughness for glossy
+    let roughness_tex = Arc::new(ConstantTexture::new(SampledSpectrum::splat(0.2)));
 
-    // High intensity because the light is small
+    let principled_mat = Arc::new(PrincipledMaterial::new(base_tex.clone(), metallic_tex.clone(), roughness_tex.clone()));
+
+    // High intensity for small light
     let light_emit = Arc::new(ConstantTexture::new(SampledSpectrum::new(50.0)));
     let light_mat = Arc::new(EmissiveMaterial::new(light_emit));
 
@@ -42,31 +47,26 @@ fn main() {
     let idx_obj = vec![0, 2, 1]; // Normal points -Z (Towards Camera)
     let mesh_obj = Arc::new(TriangleMesh::new(idx_obj, v_obj, None, None));
     let tri_obj = Arc::new(Triangle::new(mesh_obj, 0));
-    let prim_obj = Arc::new(GeometricPrimitive::new(tri_obj, Some(marble_mat), 1.0));
+    let prim_obj = Arc::new(GeometricPrimitive::new(tri_obj, Some(principled_mat), 1.0));
 
-    // B. Area Light
-    // FIX 1: Move Light to Z = -1.0 (Between Camera and Object)
-    // Previously it was at Z = +1.0 (Behind Object)
+    // B. Area Light (Placed between camera and object)
     let v_light = vec![
         Point3::new(-0.5, 1.5, -1.0),
         Point3::new( 0.5, 1.5, -1.0),
         Point3::new( 0.0, 1.5, -0.5), // Angled slightly back towards object
     ];
-    // Winding 0,1,2 for this setup points mostly Down (-Y) and Back (+Z)
-    let idx_light = vec![0, 1, 2]; 
+    let idx_light = vec![0, 1, 2];
     let mesh_light = Arc::new(TriangleMesh::new(idx_light, v_light, None, None));
-    
-    // Shared Shape: We need the shape for both the Light Logic AND the Scene Geometry
     let tri_light_shape = Arc::new(Triangle::new(mesh_light, 0));
 
-    // The Logic (for Integrator sampling)
+    // For integrator sampling
     let area_light = Box::new(DiffuseAreaLight::new(
         tri_light_shape.clone(),
         SampledSpectrum::new(50.0),
     ));
     let lights: Vec<Box<dyn Light>> = vec![area_light];
 
-    // The Geometry (for Camera visibility)
+    // For scene geometry and camera visibility (emissive primitive)
     let prim_light = Arc::new(GeometricPrimitive::new(
         tri_light_shape, 
         Some(light_mat), 
@@ -76,7 +76,6 @@ fn main() {
     // --------------------------------------------------
     // 3. Scene List
     // --------------------------------------------------
-    // FIX 2: Add prim_light to the scene so it is visible to the camera
     let scene = PrimitiveList::new(vec![prim_obj, prim_light]);
 
     // --------------------------------------------------

@@ -1,9 +1,17 @@
 use crate::core::geometry::{Vector3, Point2};
 use crate::core::spectrum::SampledSpectrum;
 use std::f32::consts::PI;
+use crate::core::microfacet::TrowbridgeReitzDistribution;
+use crate::core::reflection::{fr_conductor, fr_dielectric};
+
+// --- Small helper ---
+fn lerp_spectrum(a: SampledSpectrum, b: SampledSpectrum, t: f32) -> SampledSpectrum {
+    a * (1.0 - t) + b * t
+}
 
 // --- Helper Functions ---
 fn cos_theta(w: Vector3) -> f32 { w.z }
+fn abs_cos_theta(w: Vector3) -> f32 { w.z.abs() }
 
 // --- 1. The Local Coordinate Frame ---
 #[derive(Debug, Clone, Copy)]
@@ -33,37 +41,129 @@ fn coordinate_system(v1: Vector3) -> (Vector3, Vector3) {
     (v2, v3)
 }
 
-// --- 2. The BxDF Enum ---
-pub enum BxDF {
-    Diffuse(DiffuseBxDF),
-    ThinDielectric(ThinDielectricBxDF),
+// --- 2. The Fresnel Trait & Implementations ---
+pub trait Fresnel: Send + Sync {
+    fn evaluate(&self, cos_theta_i: f32) -> SampledSpectrum;
 }
 
-impl BxDF {
+pub struct FresnelConductor {
+    pub eta: SampledSpectrum,
+    pub k: SampledSpectrum,
+}
+
+impl Fresnel for FresnelConductor {
+    fn evaluate(&self, cos_theta_i: f32) -> SampledSpectrum {
+        // Conductors (Metals) use complex IOR.
+        fr_conductor(cos_theta_i.abs(), self.eta, self.k)
+    }
+}
+
+pub struct FresnelDielectric {
+    pub eta_i: f32,
+    pub eta_t: f32,
+}
+
+impl Fresnel for FresnelDielectric {
+    fn evaluate(&self, cos_theta_i: f32) -> SampledSpectrum {
+        let f = fr_dielectric(cos_theta_i, self.eta_i, self.eta_t);
+        SampledSpectrum::splat(f)
+    }
+}
+
+// --- 3. The Cook-Torrance Microfacet BRDF ---
+pub struct MicrofacetReflection {
+    r: SampledSpectrum, // Reflectance (Albedo/Tint)
+    distribution: TrowbridgeReitzDistribution,
+    fresnel: Box<dyn Fresnel>,
+}
+
+impl MicrofacetReflection {
+    pub fn new(
+        r: SampledSpectrum,
+        distribution: TrowbridgeReitzDistribution,
+        fresnel: Box<dyn Fresnel>,
+    ) -> Self {
+        Self { r, distribution, fresnel }
+    }
+
     pub fn f(&self, wo: Vector3, wi: Vector3) -> SampledSpectrum {
-        match self {
-            BxDF::Diffuse(b) => b.f(wo, wi),
-            BxDF::ThinDielectric(b) => b.f(wo, wi),
+        let cos_theta_o = abs_cos_theta(wo);
+        let cos_theta_i = abs_cos_theta(wi);
+        
+        // Edge Case: Grazing angles cause division by zero or NaN.
+        if cos_theta_i == 0.0 || cos_theta_o == 0.0 {
+            return SampledSpectrum::new(0.0);
         }
+
+        // Half-vector
+        let mut wh = wo + wi;
+        // Handle degenerate case where wo and wi are exactly opposite
+        if wh.x == 0.0 && wh.y == 0.0 && wh.z == 0.0 {
+            return SampledSpectrum::new(0.0);
+        }
+        wh = wh.normalize();
+
+        // 1. Distribution D(h)
+        let d = self.distribution.d(wh);
+
+        // 2. Fresnel F(o, h)
+        // Note: Fresnel is evaluated using dot(wo, wh)
+        let f = self.fresnel.evaluate(wo.dot(wh));
+
+        // 3. Geometry G(o, i)
+        let g = self.distribution.g(wo, wi);
+
+        // Cook-Torrance Denominator: 4 * (n.i) * (n.o)
+        let denom = 4.0 * cos_theta_i * cos_theta_o;
+
+        // Result: (R * D * F * G) / Denom
+        self.r * f * (d * g / denom)
     }
+
     pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
-        match self {
-            BxDF::Diffuse(b) => b.sample_f(wo, u),
-            BxDF::ThinDielectric(b) => b.sample_f(wo, u),
-        }
+        // 1. Sample Microfacet Normal (wh)
+        if wo.z == 0.0 { return None; }
+
+        let wh = self.distribution.sample_wh(wo, u);
+
+        // 2. Reflect wo about wh to get wi
+        // Vector3 reflect: -wo + 2 * dot(wo, wh) * wh
+        let wi = Vector3::from(wh) * (2.0 * wo.dot(wh)) - wo;
+
+        // Ensure we are still in the upper hemisphere
+        if wo.z * wi.z < 0.0 { return None; }
+
+        // 3. Compute PDF
+        let pdf = self.pdf(wo, wi);
+        if pdf <= 0.0 { return None; }
+
+        // 4. Evaluate f()
+        let f = self.f(wo, wi);
+
+        Some((f, wi, pdf))
     }
+
     pub fn pdf(&self, wo: Vector3, wi: Vector3) -> f32 {
-        match self {
-            BxDF::Diffuse(b) => b.pdf(wo, wi),
-            BxDF::ThinDielectric(b) => b.pdf(wo, wi),
-        }
+        if wo.z * wi.z < 0.0 { return 0.0; } // Different hemispheres
+        
+        let mut wh = wo + wi;
+        if wh.x == 0.0 && wh.y == 0.0 && wh.z == 0.0 { return 0.0; }
+        wh = wh.normalize();
+
+        // PDF of sampling wh: D(wh) * cos_theta_wh
+        let pdf_wh = self.distribution.d(wh) * abs_cos_theta(wh);
+        
+        // Jacobian change of variables: d_wh -> d_wi
+        // pdf_wi = pdf_wh / (4 * dot(wo, wh))
+        pdf_wh / (4.0 * wo.dot(wh).abs())
     }
 }
 
-// --- 3. Diffuse BxDF ---
+// --- 5. Diffuse BxDF ---
 pub struct DiffuseBxDF {
     pub r: SampledSpectrum,
 }
+
 impl DiffuseBxDF {
     pub fn new(r: SampledSpectrum) -> Self { Self { r } }
     pub fn f(&self, _wo: Vector3, _wi: Vector3) -> SampledSpectrum {
@@ -79,7 +179,7 @@ impl DiffuseBxDF {
     }
 }
 
-// --- 4. Thin Dielectric BxDF (Window / Bubble) ---
+// --- 6. Thin Dielectric BxDF (Window / Bubble) ---
 pub struct ThinDielectricBxDF {
     pub eta: f32,       // IOR (e.g., 1.5)
     pub thickness: f32, // 0.0 = Window (Incoherent), >0.0 = Bubble (Coherent, nm)
@@ -100,19 +200,12 @@ impl ThinDielectricBxDF {
         let f = crate::core::reflection::fr_dielectric(cos_theta(wo), 1.0, self.eta);
 
         // --- INTERFERENCE LOGIC ---
-        // If thickness > 0, we calculate Wave Interference (Soap Bubble).
-        // If thickness == 0, we assume it's a thick window (Incoherent sum).
-        
         let (r_spectrum, t_spectrum) = if self.thickness > 0.0 {
             // -- COHERENT (Bubble) --
-            // We need wavelengths to calculate phase shift.
-            // Using standard visible approximations for the 4 buckets [400-700nm]
             let lambdas = [437.5, 512.5, 587.5, 662.5]; 
             let mut r_vals = [0.0; 4];
             let mut t_vals = [0.0; 4];
 
-            // Optical Path Difference: 2 * eta * d * cos(theta_t)
-            // Snell's law for cos(theta_t) inside film
             let sin_theta_i2 = 1.0 - wo.z * wo.z;
             let sin_theta_t2 = sin_theta_i2 / (self.eta * self.eta);
             let cos_theta_t = (1.0 - sin_theta_t2).max(0.0).sqrt();
@@ -121,35 +214,21 @@ impl ThinDielectricBxDF {
 
             for i in 0..4 {
                 let lambda = lambdas[i];
-                // Phase shift = 2*PI * path / lambda + PI (for external reflection flip)
-                // Note: The first reflection (Air->Film) has PI shift. Second (Film->Air) does not.
-                // The relative phase shift is 2*PI*path/lambda.
                 let phase = (2.0 * PI * path_diff) / lambda;
-                
-                // Interference Intensity: I = 2F(1 - cos(phase)) approx for weak reflections
-                // Or exact geometric series for coherent light:
-                // R = (2r^2 (1 - cos phi)) / (1 + r^4 - 2r^2 cos phi) where r = sqrt(F)
-                // Let's use the simple thin film approximation: 
-                // R ~ 4 * F * sin^2(phase/2) (assuming F is small)
-                
                 let s = (phase / 2.0).sin();
                 let r_coherent = 4.0 * f * s * s;
-                
                 r_vals[i] = r_coherent.clamp(0.0, 1.0);
                 t_vals[i] = 1.0 - r_vals[i];
             }
             
             (SampledSpectrum { values: r_vals }, SampledSpectrum { values: t_vals })
-
         } else {
             // -- INCOHERENT (Window) --
-            // R = 2F / (1 + F)
             let r_val = (2.0 * f) / (1.0 + f);
             (SampledSpectrum::splat(r_val), SampledSpectrum::splat(1.0 - r_val))
         };
 
         // Probability of reflection (average across spectrum to pick a path)
-        // We just pick one channel or average them for the PDF
         let r_prob = (r_spectrum.values[0] + r_spectrum.values[1] + r_spectrum.values[2]) / 3.0;
         
         if u.x < r_prob {
@@ -172,11 +251,73 @@ fn cosine_sample_hemisphere(u: Point2) -> Vector3 {
     Vector3 { x: d.x, y: d.y, z }
 }
 
-// --- 5. BSDF Container ---
+// --- NEW: FresnelBlend (Layering) ---
+pub struct FresnelBlend {
+    diffuse: DiffuseBxDF,
+    specular: MicrofacetReflection,
+}
+
+impl FresnelBlend {
+    pub fn new(diffuse: DiffuseBxDF, specular: MicrofacetReflection) -> Self {
+        Self { diffuse, specular }
+    }
+
+    pub fn f(&self, wo: Vector3, wi: Vector3) -> SampledSpectrum {
+        // Specular term
+        let specular_term = self.specular.f(wo, wi);
+
+        // Fresnel weight using Schlick approximation with F0 = 0.04 (typical dielectric)
+        let wh = (wo + wi).normalize();
+        let cos_theta_d = wo.dot(wh).abs();
+        let f0 = 0.04;
+        let f_s = f0 + (1.0 - f0) * (1.0 - cos_theta_d).powi(5);
+
+        // Diffuse scaled by (1 - F_s)
+        let diffuse_term = self.diffuse.f(wo, wi) * (1.0 - f_s);
+
+        specular_term + diffuse_term
+    }
+
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+        // Simple two-way sampling with equal split (0.5/0.5)
+        if u.x < 0.5 {
+            // Sample Specular
+            let u_remapped = Point2 { x: u.x * 2.0, y: u.y };
+            if let Some((f_spec, wi, pdf_spec)) = self.specular.sample_f(wo, u_remapped) {
+                // Add diffuse contribution for that direction
+                let wh = (wo + wi).normalize();
+                let cos_theta_d = wo.dot(wh).abs();
+                let f0 = 0.04;
+                let f_s = f0 + (1.0 - f0) * (1.0 - cos_theta_d).powi(5);
+                let diff = self.diffuse.f(wo, wi) * (1.0 - f_s);
+                Some((f_spec + diff, wi, pdf_spec * 0.5))
+            } else { None }
+        } else {
+            // Sample Diffuse
+            let u_remapped = Point2 { x: (u.x - 0.5) * 2.0, y: u.y };
+            if let Some((f_diff, wi, pdf_diff)) = self.diffuse.sample_f(wo, u_remapped) {
+                let wh = (wo + wi).normalize();
+                let cos_theta_d = wo.dot(wh).abs();
+                let f0 = 0.04;
+                let f_s = f0 + (1.0 - f0) * (1.0 - cos_theta_d).powi(5);
+                let diff_val = f_diff * (1.0 - f_s);
+                let spec_val = self.specular.f(wo, wi);
+                Some((diff_val + spec_val, wi, pdf_diff * 0.5))
+            } else { None }
+        }
+    }
+
+    pub fn pdf(&self, wo: Vector3, wi: Vector3) -> f32 {
+        0.5 * self.specular.pdf(wo, wi) + 0.5 * self.diffuse.pdf(wo, wi)
+    }
+}
+
+// --- 7. BSDF Container ---
 pub struct BSDF {
     frame: Frame,
     bxdf: BxDF,
 }
+
 impl BSDF {
     pub fn new(normal: Vector3, bxdf: BxDF) -> Self {
         BSDF { frame: Frame::from_z(normal), bxdf }
@@ -189,5 +330,40 @@ impl BSDF {
         if let Some((f, wi_local, pdf)) = self.bxdf.sample_f(wo, u) {
             Some((f, self.frame.from_local(wi_local), pdf))
         } else { None }
+    }
+}
+
+// --- 8. The BxDF Enum ---
+pub enum BxDF {
+    Diffuse(DiffuseBxDF),
+    ThinDielectric(ThinDielectricBxDF),
+    Microfacet(MicrofacetReflection),
+    FresnelBlend(FresnelBlend), // <--- NEW
+}
+
+impl BxDF {
+    pub fn f(&self, wo: Vector3, wi: Vector3) -> SampledSpectrum {
+        match self {
+            BxDF::Diffuse(b) => b.f(wo, wi),
+            BxDF::ThinDielectric(b) => b.f(wo, wi),
+            BxDF::Microfacet(b) => b.f(wo, wi),
+            BxDF::FresnelBlend(b) => b.f(wo, wi),
+        }
+    }
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+        match self {
+            BxDF::Diffuse(b) => b.sample_f(wo, u),
+            BxDF::ThinDielectric(b) => b.sample_f(wo, u),
+            BxDF::Microfacet(b) => b.sample_f(wo, u),
+            BxDF::FresnelBlend(b) => b.sample_f(wo, u),
+        }
+    }
+    pub fn pdf(&self, wo: Vector3, wi: Vector3) -> f32 {
+        match self {
+            BxDF::Diffuse(b) => b.pdf(wo, wi),
+            BxDF::ThinDielectric(b) => b.pdf(wo, wi),
+            BxDF::Microfacet(b) => b.pdf(wo, wi),
+            BxDF::FresnelBlend(b) => b.pdf(wo, wi),
+        }
     }
 }

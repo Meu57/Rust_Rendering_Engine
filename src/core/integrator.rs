@@ -47,7 +47,7 @@ pub fn render(
                 let wavelengths =
                     SampledWavelengths::sample_uniform(sampler.get_2d().x);
 
-                let mut L = SampledSpectrum::new(0.0);
+                let mut l = SampledSpectrum::new(0.0);
                 let mut beta = SampledSpectrum::new(1.0);
 
                 for _bounce in 0..max_depth {
@@ -95,7 +95,7 @@ pub fn render(
 
                                 let f = bsdf.f(-ray.d, ls.wi);
 
-                                L = L + beta * f * ls.l * (cos_theta / ls.pdf);
+                                l = l + beta * f * ls.l * (cos_theta / ls.pdf);
                             }
                         }
                     }
@@ -125,7 +125,7 @@ pub fn render(
                 }
 
                 let rgb =
-                    SampledSpectrum::xyz_to_rgb(L.to_xyz(&wavelengths));
+                    SampledSpectrum::xyz_to_rgb(l.to_xyz(&wavelengths));
 
                 pixel_color = pixel_color
                     + Vector3 {
