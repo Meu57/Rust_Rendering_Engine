@@ -54,9 +54,12 @@ fn main() {
     let mesh_light =
         Arc::new(TriangleMesh::new(idx_light, v_light, None, None));
 
+    // FIX: Create a Shape (Triangle) from the Mesh to pass to the Light
+    let tri_light = Arc::new(Triangle::new(mesh_light, 0));
+
     let area_light = Box::new(
         DiffuseAreaLight::new(
-            mesh_light,
+            tri_light,
             SampledSpectrum::new(20.0),
         )
     );
@@ -64,7 +67,7 @@ fn main() {
     let lights: Vec<Box<dyn Light>> = vec![area_light];
 
     // --------------------------------------------------
-    // Scene (NO emissive primitives)
+    // Scene (NO emissive primitives needed in list if passed as lights)
     // --------------------------------------------------
     let scene = PrimitiveList::new(vec![prim_obj]);
 

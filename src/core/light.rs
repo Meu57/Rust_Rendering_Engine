@@ -75,10 +75,12 @@ impl Light for DiffuseAreaLight {
         }
 
         let dist = dist_sq.sqrt();
-        let wi = wi_vec / dist;
+        // FIX: Vector3 does not implement Div<f32>, use multiplication by reciprocal
+        let wi = wi_vec * (1.0 / dist);
 
         // 3. Backface culling (light must face the shading point)
-        let cos_theta_light = n_light.dot(-wi);
+        // FIX: Convert Normal3 to Vector3 for dot product
+        let cos_theta_light = Vector3::from(n_light).dot(-wi);
         if cos_theta_light <= 0.0 {
             return None;
         }

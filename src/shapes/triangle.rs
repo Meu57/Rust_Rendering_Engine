@@ -57,9 +57,6 @@ impl Shape for Triangle {
         Bounds3::new(p0, p1).union_point(p2)
     }
 
-    // ------------------------------------------------------------
-    // NEW: Surface Area (required for unbiased area light sampling)
-    // ------------------------------------------------------------
     fn area(&self) -> f32 {
         let idx = &self.mesh.vertex_indices;
         let p0 = self.mesh.p[idx[self.v_index]];
@@ -69,9 +66,6 @@ impl Shape for Triangle {
         0.5 * (p1 - p0).cross(p2 - p0).length()
     }
 
-    // ------------------------------------------------------------
-    // NEW: Uniform Surface Sampling (p(A) = 1 / Area)
-    // ------------------------------------------------------------
     fn sample(&self, u: Point2) -> (Point3, Normal3) {
         // Area-preserving barycentric sampling
         let b = sample_uniform_triangle(u);
@@ -84,7 +78,9 @@ impl Shape for Triangle {
         let p1 = self.mesh.p[idx[self.v_index + 1]];
         let p2 = self.mesh.p[idx[self.v_index + 2]];
 
-        let p = p0 * b0 + p1 * b1 + p2 * b2;
+        // FIX: Point interpolation using vectors
+        // P = P0 + b1*(P1-P0) + b2*(P2-P0)
+        let p = p0 + (p1 - p0) * b1 + (p2 - p0) * b2;
 
         // Geometric normal (not shading normal)
         let n = Normal3::from((p1 - p0).cross(p2 - p0).normalize());
@@ -92,9 +88,6 @@ impl Shape for Triangle {
         (p, n)
     }
 
-    // ------------------------------------------------------------
-    // Ray–Triangle Intersection (UNCHANGED)
-    // ------------------------------------------------------------
     fn intersect(&self, ray: &Ray, t_max: f32) -> Option<(f32, SurfaceInteraction)> {
         let idx = &self.mesh.vertex_indices;
         let p0 = self.mesh.p[idx[self.v_index]];
