@@ -5,64 +5,99 @@ use crate::core::transform::Transform;
 use crate::core::noise::Perlin; 
 use std::f32::consts::PI;
 
-// --- 1. The Texture Trait (Moved from imagemap.rs) ---
 pub trait Texture: Send + Sync {
     fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum;
 }
 
-// --- 2. Noise Texture (Procedural) ---
+// --- 1. Basic Noise Texture (Keep as is) ---
 pub struct NoiseTexture {
     noise: Perlin,
-    scale: f32, // Controls frequency (how "zoomed out" the noise is)
+    scale: f32,
 }
-
 impl NoiseTexture {
     pub fn new(scale: f32) -> Self {
-        NoiseTexture {
-            noise: Perlin::new(),
-            scale,
-        }
+        NoiseTexture { noise: Perlin::new(), scale }
+    }
+}
+impl Texture for NoiseTexture {
+    fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum {
+        let p = Point3::new(
+            si.core.p.x * self.scale,
+            si.core.p.y * self.scale,
+            si.core.p.z * self.scale
+        );
+        let n = self.noise.noise(p);
+        let val = 0.5 * (1.0 + n); 
+        SampledSpectrum::splat(val)
     }
 }
 
-impl Texture for NoiseTexture {
+// --- 2. Cloud Texture (New!) ---
+// Uses fBm for fluffy, detailed clouds
+pub struct CloudTexture {
+    noise: Perlin,
+    scale: f32,
+}
+impl CloudTexture {
+    pub fn new(scale: f32) -> Self {
+        CloudTexture { noise: Perlin::new(), scale }
+    }
+}
+impl Texture for CloudTexture {
     fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum {
-        // FIX: Point3 * f32 is not implemented. Scale manually.
+        let p = Point3::new(
+            si.core.p.x * self.scale,
+            si.core.p.y * self.scale,
+            si.core.p.z * self.scale
+        );
+        // Depth 7 gives nice detail
+        let n = self.noise.fbm(p, 7); 
+        let val = 0.5 * (1.0 + n.clamp(-1.0, 1.0));
+        SampledSpectrum::splat(val)
+    }
+}
+
+// --- 3. Marble Texture (New!) ---
+// Uses Turbulence to distort a Sine wave
+pub struct MarbleTexture {
+    noise: Perlin,
+    scale: f32,
+}
+impl MarbleTexture {
+    pub fn new(scale: f32) -> Self {
+        MarbleTexture { noise: Perlin::new(), scale }
+    }
+}
+impl Texture for MarbleTexture {
+    fn evaluate(&self, si: &SurfaceInteraction) -> SampledSpectrum {
         let p = Point3::new(
             si.core.p.x * self.scale,
             si.core.p.y * self.scale,
             si.core.p.z * self.scale
         );
         
-        // Evaluate Perlin Noise at this point
-        // noise() returns -1.0 to 1.0 (approx). 
-        // We map it to 0.0 to 1.0 for color.
-        let n = self.noise.noise(p);
-        let val = 0.5 * (1.0 + n); 
+        // Marble Math: sin(z + turbulence)
+        // 10.0 controls how "wobbly" the veins are
+        let chaos = 10.0 * self.noise.turbulence(p, 7);
+        let val = 0.5 * (1.0 + (p.z + chaos).sin());
         
-        // Return as Greyscale
         SampledSpectrum::splat(val)
     }
 }
 
-// --- 3. Constant Texture (Helper) ---
+// ... (Keep the rest of the file: ConstantTexture, Mappings, etc.) ...
 pub struct ConstantTexture {
     value: SampledSpectrum,
 }
-
 impl ConstantTexture {
     pub fn new(value: SampledSpectrum) -> Self { Self { value } }
 }
-
 impl Texture for ConstantTexture {
     fn evaluate(&self, _si: &SurfaceInteraction) -> SampledSpectrum {
         self.value
     }
 }
 
-// --- 4. Texture Mappings ---
-
-// FIX: Added 'Send + Sync' requirement so it can be used in Texture
 pub trait TextureMapping2D: Send + Sync {
     fn map(&self, si: &SurfaceInteraction) -> Point2;
 }

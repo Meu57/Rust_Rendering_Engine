@@ -4,7 +4,8 @@ use crate::core::primitive::Primitive;
 use crate::core::sampler::StratifiedSampler;
 use crate::core::film::Film;
 use crate::core::spectrum::{SampledSpectrum, SampledWavelengths};
-use crate::core::texture::{Texture, NoiseTexture}; 
+// Note: We import the new texture types here
+use crate::core::texture::{Texture, MarbleTexture, CloudTexture, NoiseTexture}; 
 
 pub fn render(
     scene: &dyn Primitive,
@@ -14,9 +15,9 @@ pub fn render(
     let mut sampler = StratifiedSampler::new(2, 2); 
     let spp = sampler.samples_per_pixel() as f32;
 
-    // Create the Procedural Texture
-    // Scale 4.0 = Nice cloud density
-    let noise_tex = NoiseTexture::new(4.0);
+    // Use Marble Texture
+    // Scale 4.0 creates good stripe frequency
+    let marble_tex = MarbleTexture::new(4.0);
 
     println!("Rendering {}x{} image...", film.resolution.x, film.resolution.y);
 
@@ -39,15 +40,13 @@ pub fn render(
 
                 let color = if let Some((_, interaction)) = scene.intersect(&ray) {
                     
-                    // 1. Evaluate Noise (0.0 to 1.0)
-                    let spectrum = noise_tex.evaluate(&interaction);
+                    // Evaluate Marble
+                    let spectrum = marble_tex.evaluate(&interaction);
                     
-                    // 2. Convert to RGB (Integrates to ~60.0 - 120.0)
                     let wavelengths = SampledWavelengths::sample_uniform(0.5);
                     let raw_rgb = SampledSpectrum::xyz_to_rgb(spectrum.to_xyz(&wavelengths));
 
-                    // 3. FINAL FIX: Stronger Exposure Compensation
-                    // 120.0 * 0.008 = 0.96 (Just below clipping)
+                    // Use the safe exposure from last time
                     let exposure = 0.008;
                     
                     Vector3 { 
