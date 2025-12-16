@@ -120,14 +120,14 @@ impl MicrofacetReflection {
         self.r * f * (d * g / denom)
     }
 
-    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+    // UPDATED: return (f, wi, pdf, is_delta)
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         // 1. Sample Microfacet Normal (wh)
         if wo.z == 0.0 { return None; }
 
         let wh = self.distribution.sample_wh(wo, u);
 
         // 2. Reflect wo about wh to get wi
-        // Vector3 reflect: -wo + 2 * dot(wo, wh) * wh
         let wi = Vector3::from(wh) * (2.0 * wo.dot(wh)) - wo;
 
         // Ensure we are still in the upper hemisphere
@@ -140,9 +140,10 @@ impl MicrofacetReflection {
         // 4. Evaluate f()
         let f = self.f(wo, wi);
 
-        Some((f, wi, pdf))
+        // Microfacet is scattering (not delta)
+        Some((f, wi, pdf, false))
     }
-
+    
     pub fn pdf(&self, wo: Vector3, wi: Vector3) -> f32 {
         if wo.z * wi.z < 0.0 { return 0.0; } // Different hemispheres
         
@@ -169,10 +170,11 @@ impl DiffuseBxDF {
     pub fn f(&self, _wo: Vector3, _wi: Vector3) -> SampledSpectrum {
         self.r * (1.0 / PI)
     }
-    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         let wi = cosine_sample_hemisphere(u);
         if wo.z * wi.z < 0.0 { return None; }
-        Some((self.f(wo, wi), wi, self.pdf(wo, wi)))
+        Some((self.f(wo, wi), wi, self.pdf(wo, wi), false))
     }
     pub fn pdf(&self, _wo: Vector3, wi: Vector3) -> f32 {
         if wi.z <= 0.0 { 0.0 } else { wi.z * (1.0 / PI) }
@@ -195,7 +197,8 @@ impl ThinDielectricBxDF {
     }
     pub fn pdf(&self, _wo: Vector3, _wi: Vector3) -> f32 { 0.0 }
 
-    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+    // UPDATED: return signature includes is_delta flag
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         // Fresnel for the single interface
         let f = crate::core::reflection::fr_dielectric(cos_theta(wo), 1.0, self.eta);
 
@@ -232,14 +235,15 @@ impl ThinDielectricBxDF {
         let r_prob = (r_spectrum.values[0] + r_spectrum.values[1] + r_spectrum.values[2]) / 3.0;
         
         if u.x < r_prob {
-            // Reflect
+            // Reflect (delta)
             let wi = Vector3 { x: -wo.x, y: -wo.y, z: wo.z };
-            Some((r_spectrum * (1.0 / r_prob), wi, r_prob)) // Weight = R / PDF
+            // Return weighted spectrum (importance sampling correction) and mark as delta
+            Some((r_spectrum * (1.0 / r_prob), wi, r_prob, true))
         } else {
-            // Transmit
+            // Transmit (delta)
             let wi = -wo;
             let t_prob = 1.0 - r_prob;
-            Some((t_spectrum * (1.0 / t_prob), wi, t_prob))
+            Some((t_spectrum * (1.0 / t_prob), wi, t_prob, true))
         }
     }
 }
@@ -278,31 +282,23 @@ impl FresnelBlend {
         specular_term + diffuse_term
     }
 
-    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
-        // Simple two-way sampling with equal split (0.5/0.5)
+    // UPDATED: sample_f returns is_delta boolean (we return false for the blend)
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         if u.x < 0.5 {
-            // Sample Specular
-            let u_remapped = Point2 { x: u.x * 2.0, y: u.y };
-            if let Some((f_spec, wi, pdf_spec)) = self.specular.sample_f(wo, u_remapped) {
-                // Add diffuse contribution for that direction
-                let wh = (wo + wi).normalize();
-                let cos_theta_d = wo.dot(wh).abs();
-                let f0 = 0.04;
-                let f_s = f0 + (1.0 - f0) * (1.0 - cos_theta_d).powi(5);
-                let diff = self.diffuse.f(wo, wi) * (1.0 - f_s);
-                Some((f_spec + diff, wi, pdf_spec * 0.5))
+            let u_remap = Point2 { x: 2.0 * u.x, y: u.y };
+            if let Some((_f_spec, wi, _pdf_spec, is_delta)) = self.specular.sample_f(wo, u_remap) {
+                // Recalculate blended PDF/F
+                let pdf_blend = self.pdf(wo, wi);
+                let f_blend = self.f(wo, wi);
+                // For the blend we treat the result as non-delta (composite)
+                Some((f_blend, wi, pdf_blend, false))
             } else { None }
         } else {
-            // Sample Diffuse
-            let u_remapped = Point2 { x: (u.x - 0.5) * 2.0, y: u.y };
-            if let Some((f_diff, wi, pdf_diff)) = self.diffuse.sample_f(wo, u_remapped) {
-                let wh = (wo + wi).normalize();
-                let cos_theta_d = wo.dot(wh).abs();
-                let f0 = 0.04;
-                let f_s = f0 + (1.0 - f0) * (1.0 - cos_theta_d).powi(5);
-                let diff_val = f_diff * (1.0 - f_s);
-                let spec_val = self.specular.f(wo, wi);
-                Some((diff_val + spec_val, wi, pdf_diff * 0.5))
+            let u_remap = Point2 { x: 2.0 * (u.x - 0.5), y: u.y };
+            if let Some((_f_diff, wi, _pdf_diff, _is_delta)) = self.diffuse.sample_f(wo, u_remap) {
+                let pdf_blend = self.pdf(wo, wi);
+                let f_blend = self.f(wo, wi);
+                Some((f_blend, wi, pdf_blend, false))
             } else { None }
         }
     }
@@ -325,11 +321,19 @@ impl BSDF {
     pub fn f(&self, wo: Vector3, wi: Vector3) -> SampledSpectrum {
         self.bxdf.f(self.frame.to_local(wo), self.frame.to_local(wi))
     }
-    pub fn sample_f(&self, wo_world: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+
+    // UPDATED: sample_f passes through the is_delta flag and converts to world
+    pub fn sample_f(&self, wo_world: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         let wo = self.frame.to_local(wo_world);
-        if let Some((f, wi_local, pdf)) = self.bxdf.sample_f(wo, u) {
-            Some((f, self.frame.from_local(wi_local), pdf))
+        if let Some((f, wi_local, pdf, is_delta)) = self.bxdf.sample_f(wo, u) {
+            Some((f, self.frame.from_local(wi_local), pdf, is_delta))
         } else { None }
+    }
+
+    pub fn pdf(&self, wo_world: Vector3, wi_world: Vector3) -> f32 {
+        let wo = self.frame.to_local(wo_world);
+        let wi = self.frame.to_local(wi_world);
+        self.bxdf.pdf(wo, wi)
     }
 }
 
@@ -350,7 +354,9 @@ impl BxDF {
             BxDF::FresnelBlend(b) => b.f(wo, wi),
         }
     }
-    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32)> {
+
+    // UPDATED: sample_f returns the (f, wi, pdf, is_delta) tuple
+    pub fn sample_f(&self, wo: Vector3, u: Point2) -> Option<(SampledSpectrum, Vector3, f32, bool)> {
         match self {
             BxDF::Diffuse(b) => b.sample_f(wo, u),
             BxDF::ThinDielectric(b) => b.sample_f(wo, u),
@@ -358,6 +364,7 @@ impl BxDF {
             BxDF::FresnelBlend(b) => b.sample_f(wo, u),
         }
     }
+
     pub fn pdf(&self, wo: Vector3, wi: Vector3) -> f32 {
         match self {
             BxDF::Diffuse(b) => b.pdf(wo, wi),
